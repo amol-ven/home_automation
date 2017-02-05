@@ -1,18 +1,53 @@
 #include <ESP8266WiFi.h>
- 
+
+#define CMD_SIZE 5
 const char* ssid = "TP-LINK_home";
 const char* password = "vital_uta";
  
 int ledPin = 2; // GPIO2
 WiFiServer server(80);
- 
+
+char cmd[CMD_SIZE];
+int cmd_write_index = 0;
+int new_cmd_char = 0;
+
+typedef struct
+{
+  char cmd_str[CMD_SIZE];
+  void (*fn)(void);
+}cmd_table_t;
+
+void echo_my_ip(void)
+{
+  Serial.print("My IP: ");
+  Serial.print(WiFi.localIP());
+  Serial.print("\n");
+}
+void interpret_cmd()
+{
+    static cmd_table_t cmd_table [] = 
+    {
+      {"MYIP", echo_my_ip},
+    };
+    int cmd_table_size = sizeof(cmd_table)/sizeof(cmd_table[0]);
+    int i = 0;
+    for(i=0; i<cmd_table_size; i++)
+    {
+        if(0 == strncmp(cmd, cmd_table[i].cmd_str, CMD_SIZE))
+        {
+          (*(cmd_table[i].fn))();
+        }
+    }
+}
+
+
 void setup() {
   Serial.begin(115200);
   delay(10);
  
  
   pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, HIGH);
+  digitalWrite(ledPin, LOW);
    
   // Connect to WiFi network
   Serial.println();
@@ -42,6 +77,23 @@ void setup() {
 }
  
 void loop() {
+  if(0 < Serial.available())
+  {
+      new_cmd_char = Serial.read();
+      if(-1 != new_cmd_char && CMD_SIZE > cmd_write_index)
+      {
+        cmd[cmd_write_index] = new_cmd_char;
+        cmd_write_index++;
+      }
+      if(4 <= cmd_write_index)
+      {
+         cmd[CMD_SIZE] = '\0';
+         interpret_cmd();
+         cmd_write_index = 0;
+         Serial.flush();
+      }
+  }
+  
   // Check if a client has connected
   WiFiClient client = server.available();
   if (!client) {
@@ -61,14 +113,14 @@ void loop() {
    
   // Match the request
  
-  int value = HIGH;
+  int value = LOW;
   if (request.indexOf("/LED=ON") != -1) {
-    digitalWrite(ledPin, HIGH);
-    //analogWrite(ledPin, 1000);
+    //digitalWrite(ledPin, HIGH);
+    analogWrite(ledPin, 1000);
     value = HIGH;
   } 
   if (request.indexOf("/LED=OFF") != -1){
-    digitalWrite(ledPin, 0);
+    analogWrite(ledPin, 0);
     value = LOW;
   }
  
